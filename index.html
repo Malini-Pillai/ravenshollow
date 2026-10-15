@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>The Lost Treasure of Ravenshollow</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: Georgia, 'Times New Roman', serif;
+    background: #0d0d15;
+    color: #e0e0e0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+  }
+  #game {
+    width: 760px;
+    max-width: 95vw;
+    background: #1b1b2f;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 0 40px rgba(0,0,0,0.6);
+    transition: background 0.5s ease;
+  }
+  header {
+    background: #0d0d15;
+    text-align: center;
+    padding: 18px 10px 12px;
+  }
+  header h1 {
+    margin: 0;
+    color: #e8c766;
+    font-size: 24px;
+    letter-spacing: 1px;
+  }
+  header p {
+    margin: 6px 0 0;
+    color: #9a9ac0;
+    font-size: 13px;
+  }
+  #body {
+    padding: 25px 30px;
+    min-height: 260px;
+  }
+  #desc {
+    font-size: 15px;
+    line-height: 1.6;
+    margin-bottom: 14px;
+  }
+  #item {
+    color: #e8c766;
+    font-style: italic;
+    margin-bottom: 20px;
+    min-height: 20px;
+  }
+  .btn-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  button {
+    font-family: Georgia, serif;
+    font-weight: bold;
+    font-size: 14px;
+    background: #3a3a5c;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 10px 16px;
+    cursor: pointer;
+    transition: background 0.2s ease, transform 0.1s ease;
+  }
+  button:hover:not(:disabled) {
+    background: #5a5a8c;
+    transform: translateY(-1px);
+  }
+  button:disabled {
+    background: #33333f;
+    color: #777;
+    cursor: not-allowed;
+  }
+  .take-btn { background: #e8a15c; color: #221; }
+  .take-btn:hover:not(:disabled) { background: #f4b877; }
+  .riddle-btn { background: #5c8ee8; }
+  .riddle-btn:hover { background: #7ea6f0; }
+  .solved-btn { background: #3f7a4f; }
+  footer {
+    background: #0d0d15;
+    color: #8f8fb0;
+    font-size: 13px;
+    text-align: center;
+    padding: 10px;
+  }
+  /* Riddle modal */
+  #overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.65);
+    justify-content: center;
+    align-items: center;
+  }
+  #modal {
+    background: #0d0d15;
+    border-radius: 10px;
+    padding: 25px 30px;
+    width: 380px;
+    max-width: 90vw;
+    text-align: center;
+    border: 1px solid #333355;
+  }
+  #modal h2 { color: #e8c766; margin-top: 0; }
+  #modal p { font-size: 14px; line-height: 1.5; }
+  #modal input {
+    width: 80%;
+    padding: 8px;
+    font-family: Georgia, serif;
+    font-size: 14px;
+    border-radius: 5px;
+    border: none;
+    text-align: center;
+    margin: 12px 0;
+  }
+  #feedback {
+    color: #e08080;
+    font-size: 13px;
+    min-height: 18px;
+  }
+  /* End screen */
+  #endScreen {
+    display: none;
+    text-align: center;
+    padding: 60px 30px;
+  }
+  #endScreen h2 {
+    font-size: 28px;
+    margin-bottom: 15px;
+  }
+  #endScreen p {
+    font-size: 15px;
+    line-height: 1.6;
+    color: #ddd;
+  }
+</style>
+</head>
+<body>
+
+<div id="game">
+  <header>
+    <h1 id="roomTitle">Ravenshollow Manor</h1>
+    <p id="statusLine">Moves left: 15 | Clues found: 0</p>
+  </header>
+
+  <div id="body">
+    <div id="desc"></div>
+    <div id="item"></div>
+    <div class="btn-row" id="actionRow"></div>
+    <div class="btn-row" id="exitRow"></div>
+  </div>
+
+  <div id="endScreen">
+    <h2 id="endTitle"></h2>
+    <p id="endMsg"></p>
+    <button onclick="playClickSound(); restart()">Play Again</button>
+  </div>
+
+  <footer id="invLine">Inventory: empty</footer>
+</div>
+
+<div id="overlay">
+  <div id="modal">
+    <h2>Solve the Riddle</h2>
+    <p id="riddleText"></p>
+    <input id="riddleInput" type="text" placeholder="Your answer..." autocomplete="off">
+    <div id="feedback"></div>
+    <br>
+    <button onclick="checkAnswer()">Submit Answer</button>
+    <button onclick="playClickSound(); closeModal()" style="background:#555577;">Cancel</button>
+  </div>
+</div>
+
+<script>
+// ---------------- SOUND ENGINE (no external files needed) ----------------
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+function playTone(freq, startTime, duration, type = "sine", volume = 0.2) {
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, startTime);
+  gain.gain.setValueAtTime(volume, startTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.start(startTime);
+  osc.stop(startTime + duration);
+}
+
+function resumeAudio() {
+  if (audioCtx.state === "suspended") audioCtx.resume();
+}
+
+function playClickSound() {
+  resumeAudio();
+  const t = audioCtx.currentTime;
+  playTone(520, t, 0.08, "square", 0.12);
+}
+
+function playCorrectSound() {
+  resumeAudio();
+  const t = audioCtx.currentTime;
+  playTone(523.25, t, 0.15, "triangle", 0.18);       // C5
+  playTone(659.25, t + 0.1, 0.15, "triangle", 0.18); // E5
+  playTone(783.99, t + 0.2, 0.25, "triangle", 0.18); // G5
+}
+
+function playWrongSound() {
+  resumeAudio();
+  const t = audioCtx.currentTime;
+  playTone(220, t, 0.2, "sawtooth", 0.15);
+  playTone(180, t + 0.12, 0.25, "sawtooth", 0.15);
+}
+
+function playMoveSound() {
+  resumeAudio();
+  const t = audioCtx.currentTime;
+  playTone(340, t, 0.1, "sine", 0.1);
+}
+
+function playTakeItemSound() {
+  resumeAudio();
+  const t = audioCtx.currentTime;
+  playTone(660, t, 0.08, "triangle", 0.15);
+  playTone(880, t + 0.07, 0.12, "triangle", 0.15);
+}
+
+function playWinFanfare() {
+  resumeAudio();
+  const t = audioCtx.currentTime;
+  const notes = [523.25, 659.25, 783.99, 1046.5, 783.99, 1046.5]; // C E G C G C
+  const durations = [0.15, 0.15, 0.15, 0.35, 0.15, 0.5];
+  let offset = 0;
+  notes.forEach((freq, i) => {
+    playTone(freq, t + offset, durations[i], "triangle", 0.2);
+    playTone(freq / 2, t + offset, durations[i], "sine", 0.08);
+    offset += durations[i] * 0.85;
+  });
+}
+
+function playLoseSound() {
+  resumeAudio();
+  const t = audioCtx.currentTime;
+  const notes = [392.0, 349.23, 311.13, 261.63]; // G F# Eb C - descending, ominous
+  const durations = [0.3, 0.3, 0.3, 0.6];
+  let offset = 0;
+  notes.forEach((freq, i) => {
+    playTone(freq, t + offset, durations[i], "sawtooth", 0.15);
+    offset += durations[i] * 0.9;
+  });
+}
+
+const rooms = {
+  hall: {
+    name: "Entrance Hall",
+    description: "Moonlight spills through a broken window onto a dusty hall. A grand staircase leads north, a corridor leads east.",
+    item: "Rusty Key",
+    exits: { "North": "library", "East": "kitchen" },
+    bg: "#1b1b2f"
+  },
+  library: {
+    name: "Old Library",
+    description: "Shelves of decaying books line the walls. A portrait watches you with painted eyes.",
+    riddle: "I have keys but no locks, space but no room, and you can enter but can't go outside. What am I?",
+    answer: "keyboard",
+    item: "Strange Note",
+    exits: { "South": "hall", "East": "study" },
+    bg: "#26263f"
+  },
+  kitchen: {
+    name: "Abandoned Kitchen",
+    description: "Pots hang from rusted hooks above a cold hearth. A trapdoor hides beneath a moth-eaten rug.",
+    riddle: "The more you take, the more you leave behind. What am I?",
+    answer: "footsteps",
+    item: "Silver Locket",
+    exits: { "West": "hall", "Down": "cellar" },
+    bg: "#2f2018"
+  },
+  study: {
+    name: "Hidden Study",
+    description: "A secret room behind the library. Old maps of the manor cover the walls, one marked with a red X.",
+    riddle: "What has a heart that doesn't beat, and is often given but never bought?",
+    answer: "artichoke",
+    item: "Brass Compass",
+    exits: { "West": "library" },
+    bg: "#1f2a1f"
+  },
+  cellar: {
+    name: "Damp Cellar",
+    description: "Cold stone walls drip with moisture. In the center sits an ancient locked chest.",
+    riddle: "I speak without a mouth and hear without ears. I have no body, but I come alive with wind. What am I?",
+    answer: "echo",
+    item: "TREASURE",
+    exits: { "Up": "kitchen" },
+    bg: "#111118"
+  }
+};
+
+let state = {};
+
+function initState() {
+  state = {
+    movesLeft: 15,
+    cluesFound: 0,
+    inventory: [],
+    treasureFound: false,
+    current: "hall"
+  };
+  // reset room item/solved flags
+  for (const key in rooms) {
+    rooms[key].solved = false;
+  }
+  rooms.hall.item = "Rusty Key";
+  rooms.library.item = "Strange Note";
+  rooms.kitchen.item = "Silver Locket";
+  rooms.study.item = "Brass Compass";
+  rooms.cellar.item = "TREASURE";
+}
+
+function render() {
+  const room = rooms[state.current];
+  document.getElementById("game").style.background = room.bg;
+  document.getElementById("body").style.background = room.bg;
+  document.getElementById("roomTitle").textContent = room.name;
+  document.getElementById("statusLine").textContent =
+    `Moves left: ${state.movesLeft} | Clues found: ${state.cluesFound}`;
+  document.getElementById("desc").textContent = room.description;
+  document.getElementById("item").textContent =
+    room.item ? `✦ You notice: ${room.item}` : "";
+  document.getElementById("invLine").textContent =
+    "Inventory: " + (state.inventory.length ? state.inventory.join(", ") : "empty");
+
+  const actionRow = document.getElementById("actionRow");
+  actionRow.innerHTML = "";
+
+  if (room.item) {
+    const locked = room.item === "TREASURE" && !room.solved;
+    const btn = document.createElement("button");
+    btn.className = "take-btn";
+    btn.textContent = locked ? "Chest is locked" : `Take ${room.item}`;
+    btn.disabled = locked;
+    btn.onclick = takeItem;
+    actionRow.appendChild(btn);
+  }
+
+  if (room.riddle) {
+    const btn = document.createElement("button");
+    if (room.solved) {
+      btn.className = "solved-btn";
+      btn.textContent = "Riddle Solved ✓";
+      btn.disabled = true;
+    } else {
+      btn.className = "riddle-btn";
+      btn.textContent = "Solve Riddle";
+      btn.onclick = openModal;
+    }
+    actionRow.appendChild(btn);
+  }
+
+  const exitRow = document.getElementById("exitRow");
+  exitRow.innerHTML = "";
+  for (const [direction, dest] of Object.entries(room.exits)) {
+    const btn = document.createElement("button");
+    btn.textContent = `Go ${direction}`;
+    btn.onclick = () => move(dest);
+    exitRow.appendChild(btn);
+  }
+
+  if (state.treasureFound) {
+    showEnd(true);
+  } else if (state.movesLeft <= 0) {
+    showEnd(false);
+  }
+}
+
+function move(dest) {
+  playMoveSound();
+  state.movesLeft--;
+  state.current = dest;
+  render();
+}
+
+function takeItem() {
+  const room = rooms[state.current];
+  playTakeItemSound();
+  if (room.item === "TREASURE") {
+    state.treasureFound = true;
+  } else {
+    state.inventory.push(room.item);
+  }
+  room.item = null;
+  render();
+}
+
+function openModal() {
+  playClickSound();
+  const room = rooms[state.current];
+  document.getElementById("riddleText").textContent = room.riddle;
+  document.getElementById("riddleInput").value = "";
+  document.getElementById("feedback").textContent = "";
+  document.getElementById("overlay").style.display = "flex";
+  document.getElementById("riddleInput").focus();
+}
+
+function closeModal() {
+  document.getElementById("overlay").style.display = "none";
+}
+
+function checkAnswer() {
+  const room = rooms[state.current];
+  const guess = document.getElementById("riddleInput").value.trim().toLowerCase();
+  if (guess === room.answer) {
+    playCorrectSound();
+    room.solved = true;
+    state.cluesFound++;
+    closeModal();
+    render();
+  } else {
+    playWrongSound();
+    state.movesLeft--;
+    document.getElementById("feedback").textContent = "Not quite... the mystery deepens.";
+    render();
+    if (state.movesLeft <= 0) {
+      closeModal();
+    }
+  }
+}
+
+document.getElementById("riddleInput").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") checkAnswer();
+});
+
+function showEnd(win) {
+  document.getElementById("body").style.display = "none";
+  document.querySelector("header").style.display = "none";
+  document.getElementById("invLine").style.display = "none";
+  const endScreen = document.getElementById("endScreen");
+  endScreen.style.display = "block";
+
+  if (win) {
+    document.getElementById("endTitle").textContent = "TREASURE FOUND!";
+    document.getElementById("endTitle").style.color = "#e8c766";
+    document.getElementById("endMsg").textContent =
+      `The chest creaks open, revealing a glittering hoard of gold and jewels. ` +
+      `You solved ${state.cluesFound} riddle(s) and claimed the Lost Treasure of Ravenshollow!`;
+    playWinFanfare();
+  } else {
+    document.getElementById("endTitle").textContent = "Dawn Breaks...";
+    document.getElementById("endTitle").style.color = "#e08080";
+    document.getElementById("endMsg").textContent =
+      `The manor's doors seal shut before you find the treasure. ` +
+      `Riddles solved: ${state.cluesFound}. Better luck next time, adventurer.`;
+    playLoseSound();
+  }
+}
+
+function restart() {
+  initState();
+  document.querySelector("header").style.display = "block";
+  document.getElementById("body").style.display = "block";
+  document.getElementById("invLine").style.display = "block";
+  document.getElementById("endScreen").style.display = "none";
+  render();
+}
+
+initState();
+render();
+</script>
+
+</body>
+</html>
